@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini-Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+    }
+
+    canvas {
+      display: block;
+      background: white;
+      margin: 0 auto;
+    }
+
+    #game-over {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      color: black;
+      text-align: center;
+      display: none;
+    }
+
+    #game-over button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #ranking {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #000;
+    }
+
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+    }
+
+    .control-button {
+      width: 60px;
+      height: 60px;
+      background: #ddd;
+      border: 2px solid #aaa;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 60px;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .control-button:active {
+      background: #bbb;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-over">
+    <p>Game Over!</p>
+    <p>Your Score: <span id="final-score">0</span></p>
+    <div id="ranking"></div>
+    <button onclick="startGame()">Restart</button>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="controls">
+    <div class="control-button" id="left">←</div>
+    <div>
+      <div class="control-button" id="up">↑</div>
+      <div class="control-button" id="down">↓</div>
+    </div>
+    <div class="control-button" id="right">→</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = 800;
+    canvas.height = 600;
+
+    let player = { x: 375, y: 550, width: 50, height: 50, speed: 5 };
+    let obstacles = [];
+    let score = 0;
+    let gameRunning = false;
+    let obstacleSpeed = 2;
+    let spawnRate = 0.02; // Rate of obstacle creation
+
+    const keys = {
+      ArrowLeft: false,
+      ArrowRight: false,
+      ArrowUp: false,
+      ArrowDown: false,
+    };
+
+    const controlButtons = {
+      left: document.getElementById("left"),
+      right: document.getElementById("right"),
+      up: document.getElementById("up"),
+      down: document.getElementById("down"),
+    };
+
+    let playerName = "";
+
+    async function startGame() {
+      playerName = prompt("Enter your name:");
+      if (!playerName) return;
+
+      player.x = 375;
+      player.y = 550;
+      obstacles = [];
+      score = 0;
+      gameRunning = true;
+      obstacleSpeed = 2;
+      spawnRate = 0.02;
+
+      document.getElementById("game-over").style.display = "none";
+
+      requestAnimationFrame(updateGame);
+    }
+
+    function createObstacle() {
+      const size = Math.random() * 30 + 20;
+      const x = Math.random() * (canvas.width - size);
+      obstacles.push({ x, y: -size, width: size, height: size, speed: obstacleSpeed });
+    }
+
+    function updateGame() {
+      if (!gameRunning) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (keys.ArrowLeft && player.x > 0) player.x -= player.speed;
+      if (keys.ArrowRight && player.x < canvas.width - player.width) player.x += player.speed;
+      if (keys.ArrowUp && player.y > 0) player.y -= player.speed;
+      if (keys.ArrowDown && player.y < canvas.height - player.height) player.y += player.speed;
+
+      ctx.fillStyle = "green";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.y += obs.speed;
+
+        if (
+          player.x < obs.x + obs.width &&
+          player.x + player.width > obs.x &&
+          player.y < obs.y + obs.height &&
+          player.y + player.height > obs.y
+        ) {
+          endGame();
+          return;
+        }
+
+        if (obs.y > canvas.height) {
+          obstacles.splice(i, 1);
+          score++;
+
+          if (playerName !== "Sung" && score % 10 === 0) {
+            obstacleSpeed *= 1.5;
+          } else if (playerName === "Sung" && score % 5 === 0) {
+            spawnRate += 0.005;
+          }
+        } else {
+          ctx.fillStyle = "red";
+          ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+        }
+      }
+
+      ctx.fillStyle = "black";
+      ctx.font = "20px Arial";
+      ctx.fillText("Score: " + score, 10, 30);
+
+      if (Math.random() < spawnRate) {
+        createObstacle();
+      }
+
+      requestAnimationFrame(updateGame);
+    }
+
+    async function endGame() {
+      gameRunning = false;
+      document.getElementById("final-score").textContent = score;
+
+      google.script.run
+        .withSuccessHandler((ranking) => {
+          const rankingDiv = document.getElementById("ranking");
+          rankingDiv.innerHTML = "<h3>Top 10 Rankings:</h3>";
+          ranking.forEach(([name, score], index) => {
+            rankingDiv.innerHTML += `<p>${index + 1}. ${name}: ${score}</p>`;
+          });
+          document.getElementById("game-over").style.display = "block";
+        })
+        .registrarScore(playerName, score);
+    }
+
+    function addMobileControls() {
+      Object.keys(controlButtons).forEach((key) => {
+        controlButtons[key].addEventListener("touchstart", () => {
+          keys[`Arrow${key.charAt(0).toUpperCase() + key.slice(1)}`] = true;
+        });
+
+        controlButtons[key].addEventListener("touchend", () => {
+          keys[`Arrow${key.charAt(0).toUpperCase() + key.slice(1)}`] = false;
+        });
+      });
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key in keys) keys[e.key] = true;
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.key in keys) keys[e.key] = false;
+    });
+
+    addMobileControls();
+    startGame();
+  </script>
+</body>
+</html>
